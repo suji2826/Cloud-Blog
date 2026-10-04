@@ -1,0 +1,6 @@
+{
+  "name": "CloudBlog – Cloud-Based Blogging Platform",
+  "description": "A modern, production-grade cloud-powered blogging platform for creators, writers, and readers with Supabase authentication, PostgreSQL, markdown editor, comments, and role-based access control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
