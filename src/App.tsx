@@ -29,7 +29,7 @@ import { AboutPage } from './pages/AboutPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 function Router() {
-  const { user, role, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return window.location.pathname + window.location.search || '/';
@@ -91,37 +91,51 @@ function Router() {
       return <SignUpPage onNavigate={navigate} />;
     }
 
-    // 6. Writer Dashboard: /dashboard
-    if (pathname === '/dashboard') {
-      if (!user && !isLoading) {
+    // --- PROTECTED ROUTES (Write, Dashboard, My Posts, Profile, Admin) ---
+    // Show spinner if Supabase session is still resolving
+    if (isLoading) {
+      return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-stone-500">Checking authentication session...</p>
+        </div>
+      );
+    }
+
+    // If not authenticated, redirect/show Login page
+    if (!user) {
+      if (
+        pathname === '/dashboard' ||
+        pathname === '/dashboard/posts' ||
+        pathname === '/dashboard/posts/new' ||
+        (pathname.startsWith('/dashboard/posts/') && pathname.endsWith('/edit')) ||
+        pathname === '/profile' ||
+        pathname === '/admin' ||
+        pathname === '/admin/comments'
+      ) {
         return <LoginPage onNavigate={navigate} />;
       }
+    }
+
+    // 6. Writer Dashboard: /dashboard
+    if (pathname === '/dashboard') {
       return <WriterDashboardPage onNavigate={navigate} />;
     }
 
     // 7. My Posts: /dashboard/posts
     if (pathname === '/dashboard/posts') {
-      if (!user && !isLoading) {
-        return <LoginPage onNavigate={navigate} />;
-      }
       return <MyPostsPage onNavigate={navigate} />;
     }
 
     // 8. Create Post: /dashboard/posts/new
     if (pathname === '/dashboard/posts/new') {
-      if (!user && !isLoading) {
-        return <LoginPage onNavigate={navigate} />;
-      }
       return <PostEditorPage onNavigate={navigate} />;
     }
 
     // 9. Edit Post: /dashboard/posts/:id/edit
     if (pathname.startsWith('/dashboard/posts/') && pathname.endsWith('/edit')) {
-      if (!user && !isLoading) {
-        return <LoginPage onNavigate={navigate} />;
-      }
       const parts = pathname.split('/');
-      const postId = parts[3]; // /dashboard/posts/[postId]/edit
+      const postId = parts[3];
       if (postId) {
         return <PostEditorPage postId={postId} onNavigate={navigate} />;
       }
@@ -129,25 +143,16 @@ function Router() {
 
     // 10. Profile: /profile
     if (pathname === '/profile') {
-      if (!user && !isLoading) {
-        return <LoginPage onNavigate={navigate} />;
-      }
       return <ProfilePage onNavigate={navigate} />;
     }
 
     // 11. Admin Dashboard: /admin
     if (pathname === '/admin') {
-      if (!user && !isLoading) {
-        return <LoginPage onNavigate={navigate} />;
-      }
       return <AdminDashboardPage onNavigate={navigate} />;
     }
 
     // 12. Comment Management: /admin/comments
     if (pathname === '/admin/comments') {
-      if (!user && !isLoading) {
-        return <LoginPage onNavigate={navigate} />;
-      }
       return <CommentManagementPage onNavigate={navigate} />;
     }
 
@@ -177,7 +182,6 @@ function Router() {
       <Navbar
         currentPath={pathname}
         onNavigate={navigate}
-        onOpenSupabaseModal={() => setSupabaseModalOpen(true)}
       />
 
       {/* Main Page Body */}

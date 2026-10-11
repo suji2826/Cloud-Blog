@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Cloud, Eye, EyeOff, Lock, Mail, ArrowRight, Shield, Sparkles } from 'lucide-react';
-import { UserRole } from '../types/blog';
+import { Cloud, Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react';
 
 interface LoginPageProps {
   onNavigate: (path: string) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
-  const { signIn, switchDemoRole } = useAuth();
+  const { signIn, isConfigured } = useAuth();
   const { toast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -34,18 +33,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
       toast('Signed in successfully! Welcome back.', 'success');
       onNavigate('/dashboard');
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to sign in. Please verify your credentials.');
+      console.error('Sign in error:', err);
+      setErrorMessage(
+        err.message || 'Failed to sign in. Please check your credentials.'
+      );
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDemoLogin = (role: UserRole) => {
-    switchDemoRole(role);
-    toast(`Logged in as ${role.toUpperCase()} (Demo Mode)`, 'success');
-    if (role === 'admin') onNavigate('/admin');
-    else if (role === 'writer') onNavigate('/dashboard');
-    else onNavigate('/blog');
   };
 
   return (
@@ -57,46 +51,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             <Cloud className="w-7 h-7" />
           </div>
           <h2 className="text-3xl font-black text-stone-900 dark:text-white tracking-tight">
-            Welcome back
+            Sign In to CloudBlog
           </h2>
           <p className="text-sm text-stone-600 dark:text-stone-400 mt-2">
             Enter your credentials to access your writing workspace.
           </p>
         </div>
 
-        {/* Demo Fast Login Cards */}
-        <div className="p-4 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            Quick Demo Login (One-Click)
+        {/* Configuration notice if keys are placeholder */}
+        {!isConfigured && (
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs leading-relaxed">
+            <strong>Supabase Setup Note:</strong> Connect your Supabase project URL and anon public key in your <code className="font-mono">.env</code> file (<code className="font-mono">VITE_SUPABASE_URL</code> and <code className="font-mono">VITE_SUPABASE_ANON_KEY</code>) to register and authenticate real accounts.
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('writer')}
-              className="px-2 py-2 rounded-xl text-center bg-white dark:bg-stone-800 border border-indigo-200 dark:border-indigo-700 hover:border-indigo-500 shadow-2xs transition-all cursor-pointer"
-            >
-              <div className="text-xs font-bold text-stone-800 dark:text-stone-200">Writer</div>
-              <div className="text-[10px] text-stone-500">Sarah Chen</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('admin')}
-              className="px-2 py-2 rounded-xl text-center bg-white dark:bg-stone-800 border border-purple-200 dark:border-purple-700 hover:border-purple-500 shadow-2xs transition-all cursor-pointer"
-            >
-              <div className="text-xs font-bold text-purple-700 dark:text-purple-300">Admin</div>
-              <div className="text-[10px] text-stone-500">Alex Rivera</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('reader')}
-              className="px-2 py-2 rounded-xl text-center bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-stone-400 shadow-2xs transition-all cursor-pointer"
-            >
-              <div className="text-xs font-bold text-stone-800 dark:text-stone-200">Reader</div>
-              <div className="text-[10px] text-stone-500">Marcus Vance</div>
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Form Container */}
         <div className="p-8 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xl space-y-6">
@@ -117,7 +84,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="writer@cloudblog.io"
+                  placeholder="author@example.com"
                   required
                   className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
@@ -131,7 +98,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => toast('Password reset link sent to registered email.', 'info')}
+                  onClick={() => toast('Password reset instructions sent if email exists.', 'info')}
                   className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                 >
                   Forgot password?
@@ -174,7 +141,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               disabled={isLoading}
               className="w-full py-3 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? 'Signing In with Supabase...' : 'Sign In'}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -185,7 +152,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               onClick={() => onNavigate('/signup')}
               className="font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
             >
-              Sign up for free
+              Create an account
             </button>
           </div>
         </div>

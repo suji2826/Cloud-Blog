@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Database, CheckCircle, ExternalLink, Key, RefreshCw } from 'lucide-react';
+import { Database, CheckCircle, ExternalLink, Key } from 'lucide-react';
 
 interface SupabaseConfigModalProps {
   isOpen: boolean;
@@ -10,7 +10,7 @@ interface SupabaseConfigModalProps {
 }
 
 export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen, onClose }) => {
-  const { isSupabaseConfigured, setCustomSupabaseConfig, resetDemoData } = useAuth();
+  const { isConfigured, setCustomSupabaseConfig } = useAuth();
   const { toast } = useToast();
 
   const [url, setUrl] = useState(
@@ -31,7 +31,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen
       return;
     }
     setCustomSupabaseConfig(url.trim(), key.trim());
-    toast('Supabase credentials saved! Reloading application...', 'success');
+    toast('Supabase credentials saved! Connecting to Supabase...', 'success');
   };
 
   const handleClear = () => {
@@ -41,12 +41,12 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Supabase Database & Cloud Storage" maxWidth="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Supabase Project Configuration" maxWidth="lg">
       <div className="space-y-6">
         {/* Status card */}
         <div
           className={`p-4 rounded-xl border flex items-start gap-3.5 ${
-            isSupabaseConfigured
+            isConfigured
               ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80 text-emerald-900 dark:text-emerald-200'
               : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800/80 text-indigo-900 dark:text-indigo-200'
           }`}
@@ -56,12 +56,12 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen
           </div>
           <div className="text-sm">
             <div className="font-semibold text-base mb-1">
-              {isSupabaseConfigured ? 'Connected to Remote Supabase' : 'Offline / Standalone Preview Active'}
+              {isConfigured ? 'Supabase Project Connected' : 'Supabase Credentials Setup'}
             </div>
             <p className="text-xs leading-relaxed opacity-90">
-              {isSupabaseConfigured
-                ? 'Your app is directly executing queries, Row Level Security, and storage operations on your Supabase PostgreSQL database.'
-                : 'Full CRUD operations, auth sessions, and storage are actively simulated locally with persistence. Connect your Supabase project credentials anytime below.'}
+              {isConfigured
+                ? 'Your app is authenticated with your real Supabase instance. Queries, Row Level Security, and Storage operations execute directly on your PostgreSQL database.'
+                : 'Connect your Supabase project URL and anon public key below or specify them in your .env file.'}
             </p>
           </div>
         </div>
@@ -82,7 +82,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen
               />
             </div>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-              Found under Project Settings &rarr; API &rarr; Project URL
+              Found in your Supabase dashboard under Project Settings &rarr; API &rarr; Project URL
             </p>
           </div>
 
@@ -100,7 +100,7 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen
               />
             </div>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-              Found under Project Settings &rarr; API &rarr; Project API keys (anon / public)
+              Found in your Supabase dashboard under Project Settings &rarr; API &rarr; Project API keys (anon / public)
             </p>
           </div>
 
@@ -135,25 +135,17 @@ export const SupabaseConfigModal: React.FC<SupabaseConfigModalProps> = ({ isOpen
         <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 text-xs text-stone-600 dark:text-stone-400 space-y-2">
           <div className="font-semibold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
             <Key className="w-4 h-4 text-amber-500" />
-            Supabase Schema Script Ready
+            Database Schema & RLS Setup
           </div>
           <p>
-            The complete migration script with tables (<code className="text-indigo-600 dark:text-indigo-400 font-mono">profiles</code>, <code className="text-indigo-600 dark:text-indigo-400 font-mono">posts</code>, <code className="text-indigo-600 dark:text-indigo-400 font-mono">comments</code>), RLS policies, trigger functions, and storage bucket configuration is located at <code className="font-mono text-stone-900 dark:text-stone-100">supabase/schema.sql</code>.
+            The complete PostgreSQL schema script with tables (<code className="text-indigo-600 dark:text-indigo-400 font-mono">profiles</code>, <code className="text-indigo-600 dark:text-indigo-400 font-mono">posts</code>, <code className="text-indigo-600 dark:text-indigo-400 font-mono">comments</code>), RLS policies, trigger functions, and storage bucket configuration is located at <code className="font-mono text-stone-900 dark:text-stone-100">supabase/schema.sql</code>.
           </p>
-          <div className="pt-1 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={resetDemoData}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Reset Local Demo Database
-            </button>
+          <div className="pt-1 flex items-center justify-end">
             <a
               href="https://supabase.com/dashboard"
               target="_blank"
               rel="noreferrer"
-              className="text-xs text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 flex items-center gap-1"
+              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
             >
               Open Supabase Dashboard
               <ExternalLink className="w-3 h-3" />

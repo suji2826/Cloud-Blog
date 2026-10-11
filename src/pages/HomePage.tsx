@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Post, UserRole } from '../types/blog';
+import { Post } from '../types/blog';
 import { postsService } from '../services/postsService';
 import { BlogCard } from '../components/blog/BlogCard';
 import { useAuth } from '../context/AuthContext';
@@ -20,7 +20,7 @@ interface HomePageProps {
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
-  const { user, role, switchDemoRole } = useAuth();
+  const { user } = useAuth();
   const [featuredPosts, setFeaturedPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -95,41 +95,6 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               <BookOpen className="w-5 h-5 text-stone-400" />
               Explore Blogs
             </button>
-          </div>
-
-          {/* Quick Demo Switcher Bar */}
-          <div className="mt-10 p-3 rounded-2xl bg-white/70 dark:bg-stone-900/70 border border-stone-200 dark:border-stone-800 shadow-xs max-w-xl mx-auto backdrop-blur-md">
-            <div className="text-xs text-stone-500 dark:text-stone-400 mb-2 font-medium">
-              Live Role-Based Access Control Simulation:
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { role: 'admin', label: 'Admin (Alex)', desc: 'Edit & delete all' },
-                  { role: 'writer', label: 'Writer (Sarah)', desc: 'Author & publish' },
-                  { role: 'reader', label: 'Reader (Marcus)', desc: 'Read & comment' },
-                ] as const
-              ).map((item) => (
-                <button
-                  key={item.role}
-                  onClick={() => switchDemoRole(item.role as UserRole)}
-                  className={`px-2.5 py-1.5 rounded-xl text-left border transition-all cursor-pointer ${
-                    role === item.role
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                      : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:border-indigo-400'
-                  }`}
-                >
-                  <div className="text-xs font-bold truncate">{item.label}</div>
-                  <div
-                    className={`text-[10px] truncate ${
-                      role === item.role ? 'text-indigo-100' : 'text-stone-400'
-                    }`}
-                  >
-                    {item.desc}
-                  </div>
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       </section>

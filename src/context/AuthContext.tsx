@@ -1,209 +1,188 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Profile, UserRole } from '../types/blog';
-import { supabase, supabaseConfig, localStore } from '../lib/supabase';
+import { supabase, supabaseConfig } from '../lib/supabase';
 import { profilesService } from '../services/profilesService';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  profile: Profile;
+}
+
 export interface AuthContextType {
-  user: { id: string; email: string; profile: Profile } | null;
+  user: AuthUser | null;
   profile: Profile | null;
   role: UserRole;
   isLoading: boolean;
-  isSupabaseConfigured: boolean;
+  isConfigured: boolean;
   signUp: (displayName: string, email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  switchDemoRole: (role: UserRole) => void;
   updateProfile: (data: Partial<Profile>) => Promise<void>;
   setCustomSupabaseConfig: (url: string, key: string) => void;
-  resetDemoData: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<{ id: string; email: string; profile: Profile } | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSupabaseConfigured, setIsSupabaseConfigured] = useState(supabaseConfig.isConfigured);
+  const isConfigured = supabaseConfig.isConfigured;
 
-  // Initialize auth state
+  // Sync profile from Supabase
+  const syncUserProfile = async (userId: string, email: string, metadata?: any): Promise<AuthUser> => {
+    try {
+      let prof = await profilesService.getProfile(userId);
+      if (!prof) {
+        // Fallback: create initial profile record if trigger has not executed
+        const displayName = metadata?.display_name || email.split('@')[0] || 'User';
+        const newProfile: Profile = {
+          id: userId,
+          display_name: displayName,
+          role: 'writer', // default role
+          avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data: created, error } = await supabase
+          .from('profiles')
+          .upsert(newProfile)
+          .select()
+          .single();
+
+        prof = error ? newProfile : (created as Profile);
+      }
+
+      return {
+        id: userId,
+        email,
+        profile: prof,
+      };
+    } catch (e) {
+      console.error('Error syncing user profile:', e);
+      const fallbackProf: Profile = {
+        id: userId,
+        display_name: metadata?.display_name || email.split('@')[0] || 'User',
+        role: 'writer',
+      };
+      return { id: userId, email, profile: fallbackProf };
+    }
+  };
+
+  // Initial session check & auth state listener
   useEffect(() => {
-    const initializeAuth = async () => {
-      setIsLoading(true);
+    let isMounted = true;
 
-      // 1. Try real Supabase auth if configured
-      if (supabase && supabaseConfig.isConfigured) {
-        try {
-          const { data } = await supabase.auth.getSession();
-          if (data.session?.user) {
-            const sbUser = data.session.user;
-            const profile = await profilesService.getProfile(sbUser.id);
-            if (profile) {
-              setUser({
-                id: sbUser.id,
-                email: sbUser.email || '',
-                profile,
-              });
-              setIsLoading(false);
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn('Supabase auth session check failed:', e);
+    const initSession = async () => {
+      try {
+        setIsLoading(true);
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('Supabase getSession warning:', error.message);
+          if (isMounted) setUser(null);
+          return;
         }
-      }
 
-      // 2. Load from local store
-      const localUser = localStore.getCurrentUser();
-      if (localUser) {
-        setUser(localUser);
-      }
-      setIsLoading(false);
-    };
-
-    initializeAuth();
-
-    // Listen to Supabase auth events if connected
-    if (supabase) {
-      const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
-          const profile = await profilesService.getProfile(session.user.id);
-          if (profile) {
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-              profile,
-            });
-          }
-        } else {
+        if (data.session?.user && isMounted) {
+          const u = data.session.user;
+          const authUser = await syncUserProfile(u.id, u.email || '', u.user_metadata);
+          if (isMounted) setUser(authUser);
+        } else if (isMounted) {
           setUser(null);
         }
-      });
-      return () => {
-        authListener.subscription.unsubscribe();
-      };
-    }
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+        if (isMounted) setUser(null);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    initSession();
+
+    // Subscribe to real Supabase auth state change events
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const u = session.user;
+        const authUser = await syncUserProfile(u.id, u.email || '', u.user_metadata);
+        if (isMounted) setUser(authUser);
+      } else {
+        if (isMounted) setUser(null);
+      }
+      if (isMounted) setIsLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
+  // Real Supabase sign up
   const signUp = async (displayName: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      if (supabase && isSupabaseConfigured) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              display_name: displayName,
-              role: 'writer',
-            },
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName,
+            role: 'writer',
           },
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const authUser = await syncUserProfile(data.user.id, data.user.email || email, {
+          display_name: displayName,
         });
-        if (error) throw error;
-        if (data.user) {
-          // Trigger creates profile, fetch it
-          let prof = await profilesService.getProfile(data.user.id);
-          if (!prof) {
-            prof = {
-              id: data.user.id,
-              display_name: displayName,
-              role: 'writer',
-              avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            };
-            localStore.saveProfile(prof);
-          }
-          const newUser = { id: data.user.id, email: data.user.email || email, profile: prof };
-          setUser(newUser);
-          localStore.setCurrentUser(newUser);
-        }
-        return;
+        setUser(authUser);
       }
-
-      // Local / Offline store registration
-      const newId = `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-      const newProfile: Profile = {
-        id: newId,
-        display_name: displayName,
-        role: 'writer', // default role
-        avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(displayName)}`,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      localStore.saveProfile(newProfile);
-      const newUser = { id: newId, email, profile: newProfile };
-      localStore.setCurrentUser(newUser);
-      setUser(newUser);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Real Supabase sign in with password
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      if (supabase && isSupabaseConfigured) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        if (data.user) {
-          const profile = await profilesService.getProfile(data.user.id);
-          if (profile) {
-            const authUser = { id: data.user.id, email: data.user.email || email, profile };
-            setUser(authUser);
-            localStore.setCurrentUser(authUser);
-          }
-        }
-        return;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        const authUser = await syncUserProfile(
+          data.user.id,
+          data.user.email || email,
+          data.user.user_metadata
+        );
+        setUser(authUser);
       }
-
-      // Local sign-in: check existing profiles or match seed users
-      const profiles = localStore.getProfiles();
-      const matched = profiles.find((p) => {
-        if (email.toLowerCase().includes('admin') && p.role === 'admin') return true;
-        if (email.toLowerCase().includes('writer') && p.role === 'writer') return true;
-        if (email.toLowerCase().includes('reader') && p.role === 'reader') return true;
-        return p.display_name.toLowerCase() === email.split('@')[0].toLowerCase();
-      }) || profiles[1]; // default to writer
-
-      const authUser = {
-        id: matched.id,
-        email: email || `${matched.display_name.toLowerCase().replace(/\s+/g, '')}@cloudblog.io`,
-        profile: matched,
-      };
-      localStore.setCurrentUser(authUser);
-      setUser(authUser);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Real Supabase sign out
   const signOut = async () => {
-    if (supabase && isSupabaseConfigured) {
+    setIsLoading(true);
+    try {
       await supabase.auth.signOut();
+      setUser(null);
+    } catch (e) {
+      console.error('Error signing out:', e);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-    localStore.setCurrentUser(null);
-    setUser(null);
-  };
-
-  const switchDemoRole = (targetRole: UserRole) => {
-    const profiles = localStore.getProfiles();
-    const match = profiles.find((p) => p.role === targetRole) || profiles[0];
-    const emailMap: Record<UserRole, string> = {
-      admin: 'admin@cloudblog.io',
-      writer: 'writer@cloudblog.io',
-      reader: 'reader@cloudblog.io',
-    };
-    const newUser = {
-      id: match.id,
-      email: emailMap[targetRole],
-      profile: match,
-    };
-    localStore.setCurrentUser(newUser);
-    setUser(newUser);
   };
 
   const updateProfile = async (data: Partial<Profile>) => {
@@ -221,11 +200,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.reload();
   };
 
-  const resetDemoData = () => {
-    localStore.resetToDefaults();
-    window.location.reload();
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -233,14 +207,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profile: user?.profile || null,
         role: user?.profile?.role || 'reader',
         isLoading,
-        isSupabaseConfigured,
+        isConfigured,
         signUp,
         signIn,
         signOut,
-        switchDemoRole,
         updateProfile,
         setCustomSupabaseConfig,
-        resetDemoData,
       }}
     >
       {children}

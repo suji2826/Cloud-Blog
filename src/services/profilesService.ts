@@ -1,33 +1,42 @@
 import { Profile, UserRole } from '../types/blog';
-import { supabase, localStore } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 export const profilesService = {
   async getProfile(id: string): Promise<Profile | null> {
-    if (supabase) {
+    try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
+
       if (error) {
-        console.error('Error fetching profile from Supabase:', error);
-        return localStore.getProfile(id) || null;
+        console.warn('Error fetching profile from Supabase:', error.message);
+        return null;
       }
       return data;
+    } catch (e) {
+      console.error('Exception fetching profile:', e);
+      return null;
     }
-    return localStore.getProfile(id) || null;
   },
 
   async getAllProfiles(): Promise<Profile[]> {
-    if (supabase) {
-      const { data, error } = await supabase.from('profiles').select('*');
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
       if (error) {
-        console.error('Error fetching profiles from Supabase:', error);
-        return localStore.getProfiles();
+        console.warn('Error fetching all profiles:', error.message);
+        return [];
       }
       return data || [];
+    } catch (e) {
+      console.error('Exception fetching profiles:', e);
+      return [];
     }
-    return localStore.getProfiles();
   },
 
   async updateProfile(
@@ -45,32 +54,19 @@ export const profilesService = {
       throw new Error('Unauthorized: Only administrators can modify roles.');
     }
 
-    if (supabase) {
-      const { data: updated, error } = await supabase
-        .from('profiles')
-        .update({
-          ...data,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single();
+    const { data: updated, error } = await supabase
+      .from('profiles')
+      .update({
+        ...data,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
 
-      if (error) {
-        throw new Error(error.message);
-      }
-      return updated;
+    if (error) {
+      throw new Error(error.message);
     }
-
-    const existing = localStore.getProfile(id);
-    if (!existing) {
-      throw new Error('Profile not found');
-    }
-
-    const updated = localStore.saveProfile({
-      ...existing,
-      ...data,
-    });
     return updated;
   },
 };

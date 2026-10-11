@@ -44,54 +44,27 @@ export const storageService = {
     const cleanFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
     const storagePath = `${userId}/${postId}/${cleanFileName}`;
 
-    if (supabase) {
-      try {
-        if (onProgress) onProgress(50);
-        const { data, error } = await supabase.storage
-          .from('blog-images')
-          .upload(storagePath, file, {
-            cacheControl: '3600',
-            upsert: false,
-          });
+    if (onProgress) onProgress(50);
+    const { data, error } = await supabase.storage
+      .from('blog-images')
+      .upload(storagePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
 
-        if (error) {
-          console.warn('Supabase storage upload error:', error);
-          throw error;
-        }
-
-        if (onProgress) onProgress(90);
-        const { data: publicUrlData } = supabase.storage
-          .from('blog-images')
-          .getPublicUrl(data.path);
-
-        if (onProgress) onProgress(100);
-        return {
-          url: publicUrlData.publicUrl,
-          path: data.path,
-        };
-      } catch (err: any) {
-        console.warn('Falling back to local storage image data URL:', err);
-      }
+    if (error) {
+      throw new Error(`Supabase Storage upload failed: ${error.message}`);
     }
 
-    // Local / Dev Fallback: encode to high-res data URL
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadstart = () => onProgress?.(30);
-      reader.onprogress = (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(Math.min(95, Math.round((e.loaded / e.total) * 100)));
-        }
-      };
-      reader.onload = () => {
-        if (onProgress) onProgress(100);
-        resolve({
-          url: reader.result as string,
-          path: storagePath,
-        });
-      };
-      reader.onerror = () => reject(new Error('Failed to read image file.'));
-      reader.readAsDataURL(file);
-    });
+    if (onProgress) onProgress(90);
+    const { data: publicUrlData } = supabase.storage
+      .from('blog-images')
+      .getPublicUrl(data.path);
+
+    if (onProgress) onProgress(100);
+    return {
+      url: publicUrlData.publicUrl,
+      path: data.path,
+    };
   },
 };
